@@ -6,6 +6,7 @@ import com.diego.usuario.infrastructure.entity.Usuario;
 import com.diego.usuario.infrastructure.exceptions.ConflictException;
 import com.diego.usuario.infrastructure.exceptions.ResourceNotFoundException;
 import com.diego.usuario.infrastructure.repository.UsuarioRepository;
+import com.diego.usuario.infrastructure.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,6 +19,7 @@ public class UsuarioService {
     private final UsuarioRepository usuarioRepository;
     private final UsuarioConverter usuarioConverter;
     private final PasswordEncoder passwordEncoder;
+    private final JwtUtil jwtUtil;
 
     public UsuarioDTO salvaUsuario(UsuarioDTO usuarioDTO){
         emailExiste(usuarioDTO.getEmail());
@@ -49,5 +51,23 @@ public class UsuarioService {
 
     public void deletaUsuarioPorEmail(String email){
         usuarioRepository.deleteByEmail(email);
+    }
+
+    public UsuarioDTO atualizaDadosUsuario(String token, UsuarioDTO dto){
+        //Busca o email do usuário através do token (Tira a obrigatoriedade do email)
+        String email = jwtUtil.extrairEmailToken(token.substring(7));
+
+        //Criptografa a senha
+        dto.setSenha(dto.getSenha() != null ? passwordEncoder.encode(dto.getSenha()) : null);
+
+        //Busca os dados o usuário no banco
+        Usuario usuarioEntity = usuarioRepository.findByEmail(email).orElseThrow(() ->
+                new ResourceNotFoundException("Email não localizado"));
+
+        //Mescla os dados que recebemos na requisição DTO com dados do banco
+        Usuario usuario = usuarioConverter.updateUsuario(dto, usuarioEntity);
+
+        //Salva os dados do usuário convertido e pega o retorno e converte para UsuarioDTO
+        return usuarioConverter.paraUsuarioDTO(usuarioRepository.save(usuario));
     }
 }
